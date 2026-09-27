@@ -8,7 +8,7 @@ from sklearn import datasets
 from sklearn.linear_model import LinearRegression
 from sklearn.decomposition import PCA
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import plot_roc_curve, plot_precision_recall_curve
+from sklearn.metrics import RocCurveDisplay, PrecisionRecallDisplay
 import seaborn as sns
 import base64
 import plotly.graph_objects as go
@@ -29,6 +29,15 @@ from sklearn.neighbors import KNeighborsClassifier
 ## Page expands to full width
 st.set_page_config(page_title='Project for CE 548 _ MD. NABIL ZAWAD',
     layout='wide')
+
+
+def use_sample_data(label, key):
+    # st.button is only True for a single rerun; remember the click so that
+    # changing any widget afterwards keeps showing the sample-data results.
+    if st.button(label, key=key):
+        st.session_state[key + '_on'] = True
+    return st.session_state.get(key + '_on', False)
+
 def data_Cover():
     st.title('Interactive Application for Data Analysis using Machine Learning Models')
     st.write("""
@@ -75,10 +84,10 @@ def data_Linear_Regression():
             st.info(Y.name)
         elif stat == '1.4. Correlation':
             fig, ax = plt.subplots()
-            sns.heatmap(df.corr(), annot=True, vmin=-1, vmax=1, ax=ax)
+            sns.heatmap(df.corr(numeric_only=True), annot=True, vmin=-1, vmax=1, ax=ax)
             # st.write(fig)
             st.pyplot(fig)
-            st.write(df.corr())
+            st.write(df.corr(numeric_only=True))
 
         ml = LinearRegression()
         ml.fit(X_train, Y_train)
@@ -143,7 +152,7 @@ def data_Linear_Regression():
         build_model(df)
     else:
         st.info('Awaiting for CSV file to be uploaded.')
-        if st.button('Press to use Sample Dataset'):
+        if use_sample_data('Press to use Sample Dataset', 'sample_linreg'):
             df = pd.read_csv(
                 'https://raw.githubusercontent.com/nzawad/accident_severity_sample/main/npvproject_concrete_cleaned.csv')
 
@@ -189,10 +198,10 @@ def data_Logistic_Regression():
         # st.markdown('**1.4. Correlation**:')
         elif stat == '1.4. Correlation':
             fig, ax = plt.subplots()
-            sns.heatmap(df.corr(), annot=True, vmin=-1, vmax=1, ax=ax)
+            sns.heatmap(df.corr(numeric_only=True), annot=True, vmin=-1, vmax=1, ax=ax)
             # st.write(fig)
             st.pyplot(fig)
-            st.write(df.corr())
+            st.write(df.corr(numeric_only=True))
 
         lr = LogisticRegression(max_iter=12000)
         lr = lr.fit(X_train, Y_train)
@@ -212,14 +221,13 @@ def data_Logistic_Regression():
             st.info(lr.score(X_test, Y_test))
 
         elif stat == '2.3. Confusion Matrix':
-            class_names = ['0', '1']
-            cnf_matrix = confusion_matrix(y_true=Y_test, y_pred=lr.predict(X_test))
+            classes = np.unique(Y)
+            class_names = [str(c) for c in classes]
+            cnf_matrix = confusion_matrix(y_true=Y_test, y_pred=lr.predict(X_test), labels=classes)
             fig, ax = plt.subplots()
-            tick_marks = np.arange(len(class_names))
-            plt.xticks(tick_marks, class_names)
-            plt.yticks(tick_marks, class_names)
             # create heatmap
-            sns.heatmap(pd.DataFrame(cnf_matrix), annot=True, cmap="YlGnBu", fmt='g')
+            sns.heatmap(pd.DataFrame(cnf_matrix), annot=True, cmap="YlGnBu", fmt='g',
+                        xticklabels=class_names, yticklabels=class_names)
             ax.xaxis.set_label_position("top")
             plt.tight_layout()
             plt.title('Confusion matrix', y=1.1)
@@ -227,15 +235,19 @@ def data_Logistic_Regression():
             plt.xlabel('Predicted label')
             st.pyplot(fig)
 
+        elif stat in ('2.4. ROC Curve', '2.5. Precision-Recall Curve') and Y.nunique() != 2:
+            st.warning(f'{stat[5:]} is only available for binary targets; '
+                       f'this dataset has {Y.nunique()} classes.')
+
         elif stat == '2.4. ROC Curve':
             fig, ax = plt.subplots()
             st.subheader("ROC Curve")
-            plot_roc_curve(lr, X_test, Y_test, ax=ax)
+            RocCurveDisplay.from_estimator(lr, X_test, Y_test, ax=ax)
             st.pyplot(fig)
 
         elif stat == '2.5. Precision-Recall Curve':
             fig, ax = plt.subplots()
-            plot_precision_recall_curve(lr, X_test, Y_test, ax=ax)
+            PrecisionRecallDisplay.from_estimator(lr, X_test, Y_test, ax=ax)
             st.pyplot(fig)
 
         elif stat == '2.6. Feature Importance':
@@ -286,7 +298,7 @@ def data_Logistic_Regression():
         build_model(df)
     else:
         st.info('Awaiting for CSV file to be uploaded.')
-        if st.button('Press to use Sample Dataset'):
+        if use_sample_data('Press to use Sample Dataset', 'sample_logreg'):
             df = pd.read_csv(
                 'https://raw.githubusercontent.com/nzawad/accident_severity_sample/main/accident_severity_cleaned_numeric.csv')
 
@@ -320,13 +332,13 @@ def data_Random_Forest_rg():
     st.sidebar.number_input('Step size for max_features', 1)
     st.sidebar.write('---')
     parameter_min_samples_split = st.sidebar.slider(
-        'Minimum number of samples required to split an internal node (min_samples_split)', 1, 10, 2, 1)
+        'Minimum number of samples required to split an internal node (min_samples_split)', 2, 10, 2, 1)
     parameter_min_samples_leaf = st.sidebar.slider(
         'Minimum number of samples required to be at a leaf node (min_samples_leaf)', 1, 10, 2, 1)
 
     st.sidebar.subheader('General Parameters')
     parameter_random_state = st.sidebar.slider('Seed number (random_state)', 0, 1000, 42, 1)
-    parameter_criterion = st.sidebar.select_slider('Performance measure (criterion)', options=['mse', 'mae'])
+    parameter_criterion = st.sidebar.select_slider('Performance measure (criterion)', options=['squared_error', 'absolute_error'])
     parameter_bootstrap = st.sidebar.select_slider('Bootstrap samples when building trees (bootstrap)',
                                                    options=[True, False])
     parameter_oob_score = st.sidebar.select_slider(
@@ -335,6 +347,7 @@ def data_Random_Forest_rg():
 
     n_estimators_range = np.arange(parameter_n_estimators[0], parameter_n_estimators[1] + parameter_n_estimators_step,
                                    parameter_n_estimators_step)
+    n_estimators_range = n_estimators_range[n_estimators_range > 0]  # n_estimators must be >= 1
     max_features_range = np.arange(parameter_max_features[0], parameter_max_features[1] + 1, 1)
     param_grid = dict(max_features=max_features_range, n_estimators=n_estimators_range)
 
@@ -354,6 +367,10 @@ def data_Random_Forest_rg():
         return href
 
     def build_model(df):
+        if parameter_oob_score and not parameter_bootstrap:
+            st.error('oob_score=True requires bootstrap=True.')
+            return
+
         X = df.iloc[:, :-1]  # Using all column except for the last column as X
         Y = df.iloc[:, -1]  # Selecting the last column as Y
 
@@ -398,7 +415,7 @@ def data_Random_Forest_rg():
         # Pivoting the data
         grid_reset = grid_contour.reset_index()
         grid_reset.columns = ['max_features', 'n_estimators', 'R2']
-        grid_pivot = grid_reset.pivot('max_features', 'n_estimators')
+        grid_pivot = grid_reset.pivot(index='max_features', columns='n_estimators')
         x = grid_pivot.columns.levels[1].values
         y = grid_pivot.index.values
         z = grid_pivot.values
@@ -438,7 +455,7 @@ def data_Random_Forest_rg():
         build_model(df)
     else:
         st.info('Awaiting for CSV file to be uploaded.')
-        if st.button('Press to use Example Dataset'):
+        if use_sample_data('Press to use Example Dataset', 'sample_rfreg'):
             df = pd.read_csv(
                 'https://raw.githubusercontent.com/nzawad/accident_severity_sample/main/npvproject_concrete_cleaned.csv')
 
@@ -468,7 +485,7 @@ def data_Random_Forest_cls():
     split_size = st.sidebar.slider('Data split ratio (% for Training Set)', 10, 90, 80, 5)
     n_estimators = st.sidebar.number_input("The number of trees in the forest", 100, 5000, step=10, key="n_estimators")
     max_depth = st.sidebar.number_input("The maximum depth of tree", 1, 20, step=1, key="max_depth")
-    bootstrap = st.sidebar.radio("Bootstrap samples when building trees", ("True", "False"), key="bootstrap")
+    bootstrap = st.sidebar.radio("Bootstrap samples when building trees", (True, False), key="bootstrap")
     metrics = st.sidebar.multiselect("What metrics to plot?",
                                      ("Confusion Matrix", "ROC Curve", "Precision-Recall Curve"))
     ######################################
@@ -512,29 +529,35 @@ def data_Random_Forest_cls():
             y_pred_test = model1.predict(x_test)
             if "Confusion Matrix" in metrics_list:
                 st.subheader("Confusion Matrix")
-                cnf_matrix = confusion_matrix(y_true=y_test, y_pred=y_pred_test)
+                cnf_matrix = confusion_matrix(y_true=y_test, y_pred=y_pred_test, labels=classes)
                 fig, ax = plt.subplots()
-                tick_marks = np.arange(len(class_names))
-                plt.xticks(tick_marks, class_names)
-                plt.yticks(tick_marks, class_names)
                 # create heatmap
-                sns.heatmap(pd.DataFrame(cnf_matrix), annot=True, cmap="YlGnBu", fmt='g')
+                sns.heatmap(pd.DataFrame(cnf_matrix), annot=True, cmap="YlGnBu", fmt='g',
+                            xticklabels=class_names, yticklabels=class_names)
                 ax.xaxis.set_label_position("top")
                 plt.tight_layout()
                 plt.title('Confusion matrix', y=1.1)
                 plt.ylabel('Actual label')
                 plt.xlabel('Predicted label')
                 st.pyplot(fig)
+            binary_curves = [m for m in ("ROC Curve", "Precision-Recall Curve") if m in metrics_list]
+            if binary_curves and len(classes) != 2:
+                st.warning(f"{' and '.join(binary_curves)} are only available for binary targets; "
+                           f"this dataset has {len(classes)} classes.")
+                metrics_list = [m for m in metrics_list if m not in binary_curves]
             if "ROC Curve" in metrics_list:
                 st.subheader("ROC Curve")
-                plot_roc_curve(model1, x_test, y_test)
-                st.pyplot()
+                fig, ax = plt.subplots()
+                RocCurveDisplay.from_estimator(model1, x_test, y_test, ax=ax)
+                st.pyplot(fig)
             if "Precision-Recall Curve" in metrics_list:
                 st.subheader("Precision-Recall Curve")
-                plot_precision_recall_curve(model1, x_test, y_test)
-                st.pyplot()
+                fig, ax = plt.subplots()
+                PrecisionRecallDisplay.from_estimator(model1, x_test, y_test, ax=ax)
+                st.pyplot(fig)
 
-        class_names = ['0', '1']
+        classes = np.unique(y)
+        class_names = [str(c) for c in classes]
 
         plot_metrics(metrics)
 
@@ -545,7 +568,7 @@ def data_Random_Forest_cls():
 
     else:
         st.info('Awaiting for CSV file to be uploaded.')
-        if st.button('Press to use Example Dataset'):
+        if use_sample_data('Press to use Example Dataset', 'sample_rfcls'):
             df = pd.read_csv(
                 'https://raw.githubusercontent.com/nzawad/accident_severity_sample/main/accident_severity_cleaned_numeric.csv')
             st.markdown('The **Accident Severity** dataset is used as the example.')
@@ -619,10 +642,10 @@ def data_SVM():
             st.write(df.tail())
         elif stat == 'Correlation':
             fig, ax = plt.subplots()
-            sns.heatmap(df.corr(), annot=True, vmin=-1, vmax=1, ax=ax)
+            sns.heatmap(df.corr(numeric_only=True), annot=True, vmin=-1, vmax=1, ax=ax)
             # st.write(fig)
             st.pyplot(fig)
-            st.write(df.corr())
+            st.write(df.corr(numeric_only=True))
         else:
             st.write(df.describe())
 
@@ -693,10 +716,10 @@ def data_SVM():
             st.write(df.tail())
         elif stat == 'Correlation':
             fig, ax = plt.subplots()
-            sns.heatmap(df.corr(), annot=True, vmin=-1, vmax=1, ax=ax)
+            sns.heatmap(df.corr(numeric_only=True), annot=True, vmin=-1, vmax=1, ax=ax)
             # st.write(fig)
             st.pyplot(fig)
-            st.write(df.corr())
+            st.write(df.corr(numeric_only=True))
         else:
             st.write(df.describe())
 
@@ -816,10 +839,10 @@ def data_NN():
             st.write(df.tail())
         elif stat == 'Correlation':
             fig, ax = plt.subplots()
-            sns.heatmap(df.corr(), annot=True, vmin=-1, vmax=1, ax=ax)
+            sns.heatmap(df.corr(numeric_only=True), annot=True, vmin=-1, vmax=1, ax=ax)
             # st.write(fig)
             st.pyplot(fig)
-            st.write(df.corr())
+            st.write(df.corr(numeric_only=True))
         else:
             st.write(df.describe())
 
@@ -879,10 +902,10 @@ def data_NN():
             st.write(df.tail())
         elif stat == 'Correlation':
             fig, ax = plt.subplots()
-            sns.heatmap(df.corr(), annot=True, vmin=-1, vmax=1, ax=ax)
+            sns.heatmap(df.corr(numeric_only=True), annot=True, vmin=-1, vmax=1, ax=ax)
             # st.write(fig)
             st.pyplot(fig)
-            st.write(df.corr())
+            st.write(df.corr(numeric_only=True))
         else:
             st.write(df.describe())
 
@@ -965,10 +988,10 @@ def data_KNN():
             st.write(df.tail())
         elif stat == 'Correlation':
             fig, ax = plt.subplots()
-            sns.heatmap(df.corr(), annot=True, vmin=-1, vmax=1, ax=ax)
+            sns.heatmap(df.corr(numeric_only=True), annot=True, vmin=-1, vmax=1, ax=ax)
             # st.write(fig)
             st.pyplot(fig)
-            st.write(df.corr())
+            st.write(df.corr(numeric_only=True))
         else:
             st.write(df.describe())
 
@@ -1044,10 +1067,10 @@ def data_KNN():
             st.write(df.tail())
         elif stat == 'Correlation':
             fig, ax = plt.subplots()
-            sns.heatmap(df.corr(), annot=True, vmin=-1, vmax=1, ax=ax)
+            sns.heatmap(df.corr(numeric_only=True), annot=True, vmin=-1, vmax=1, ax=ax)
             # st.write(fig)
             st.pyplot(fig)
-            st.write(df.corr())
+            st.write(df.corr(numeric_only=True))
         else:
             st.write(df.describe())
 
